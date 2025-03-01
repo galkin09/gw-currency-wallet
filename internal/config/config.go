@@ -31,6 +31,7 @@ func (c *PostgresConfig) ConnectionURL() (string, error) {
 	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", c.User, c.Password, c.Host, c.Port, c.Database), nil
 }
 
+// GRPCConfig содержит настройки для подключения к gRPC
 type GRPCConfig struct {
 	Addr string
 }
@@ -39,28 +40,25 @@ type GRPCConfig struct {
 func LoadConfig(envPath string) (*Config, error) {
 	const op = "config.LoadConfig"
 
-	// Загружаем переменные окружения из файла .env
 	if err := godotenv.Load(envPath); err != nil {
 		return nil, fmt.Errorf("%s: ошибка загрузки .env файла: %w", op, err)
 	}
 
-	// Парсим настройки PostgreSQL
-	connTimeout, err := strconv.Atoi(os.Getenv("POSTGRES_CONN_TIMEOUT"))
+	connTimeout, err := strconv.Atoi(os.Getenv("DB_CONN_TIMEOUT"))
 	if err != nil {
-		return nil, fmt.Errorf("%s: неверное значение для POSTGRES_CONN_TIMEOUT: %w", op, err)
+		return nil, fmt.Errorf("%s: неверное значение для DB_CONN_TIMEOUT: %w", op, err)
 	}
 
 	postgresConfig := PostgresConfig{
-		User:           os.Getenv("POSTGRES_USER"),
-		Password:       os.Getenv("POSTGRES_PASSWORD"),
-		Host:           os.Getenv("POSTGRES_HOST"),
-		Port:           os.Getenv("POSTGRES_PORT"),
-		Database:       os.Getenv("POSTGRES_DBNAME"),
+		User:           os.Getenv("DB_USER"),
+		Password:       os.Getenv("DB_PASSWORD"),
+		Host:           os.Getenv("DB_HOST"),
+		Port:           os.Getenv("DB_PORT"),
+		Database:       os.Getenv("DB_NAME"),
 		ConnTimeout:    connTimeout,
-		MigrationsPath: os.Getenv("POSTGRES_MIGRATIONS_PATH"),
+		MigrationsPath: os.Getenv("DB_MIGRATIONS_PATH"),
 	}
 
-	// Парсим настройки gRPC
 	grpcConfig := GRPCConfig{
 		Addr: os.Getenv("GRPC_ADDR"),
 	}

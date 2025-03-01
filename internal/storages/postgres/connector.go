@@ -27,6 +27,7 @@ func NewPSQL(logger *zap.Logger) *PSQL {
 	}
 }
 
+// Start функция для инициализации БД
 func (p *PSQL) Start(ctx context.Context, url string, timeout time.Duration, migrationsPath string) error {
 	const op = "postgres.Start"
 
@@ -59,6 +60,7 @@ func (p *PSQL) Start(ctx context.Context, url string, timeout time.Duration, mig
 	return nil
 }
 
+// doMigrate выполняет миграции
 func doMigrate(dbURL, migrationsPath string) error {
 	const op = "postgres.doMigrate"
 	if migrationsPath == "" {

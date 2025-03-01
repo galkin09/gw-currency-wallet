@@ -8,6 +8,10 @@ import (
 	"go.uber.org/zap"
 	"gw-currency-wallet/internal/auth"
 	"gw-currency-wallet/internal/handlers"
+
+	"github.com/swaggo/files"
+	"github.com/swaggo/gin-swagger"
+	_ "gw-currency-wallet/docs"
 )
 
 func NewRoutes(logger *zap.Logger, dbURL string, migrationsPath string, exchangeClient pb.ExchangeServiceClient, cache *cache.Cache) (*gin.Engine, error) {
@@ -19,60 +23,24 @@ func NewRoutes(logger *zap.Logger, dbURL string, migrationsPath string, exchange
 		return nil, err
 	}
 
-	//TODO: Check default
-
 	r := gin.Default()
-	r.POST("/api/v1/register", h.RegisterUser)
-	//{
-	//	"username": "string",
-	//	"password": "string",
-	//	"email": "string"
-	//}
-	r.POST("/api/v1/login", h.LoginUser)
-	//{
-	//	"username": "string",
-	//	"password": "string"
-	//}
-	rGroup := r.Group("/api/v1").Use(auth.Auth())
 
-	rGroup.GET("/balance", h.GetBalance)
-	//{
-	//	"balance":
-	//	{
-	//		"USD": "float",
-	//		"RUB": "float",
-	//		"EUR": "float"
-	//	}
-	//}
-	rGroup.POST("/wallet/deposit", h.Deposit)
-	//{
-	//	"amount": 100.00,
-	//	"currency": "USD" // (USD, RUB, EUR)
-	//}
-	rGroup.POST("/wallet/withdraw", h.Withdraw)
-	//{
-	//	"amount": 50.00,
-	//	"currency": "USD" // USD, RUB, EUR)
-	//}
-	rGroup.GET("/exchange/rates", h.ExchangeRates)
-	//{
-	//	"rates":
-	//	{
-	//		"USD": "float",
-	//		"RUB": "float",
-	//		"EUR": "float"
-	//	}
-	//}
-	//rGroup.POST("/exchange", h.Exchange)
-	//{
-	//	"message": "Exchange successful",
-	//	"exchanged_amount": 85.00,
-	//	"new_balance":
-	//	{
-	//		"USD": 0.00,
-	//		"EUR": 85.00
-	//	}
-	//}
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+
+	public := r.Group("/api/v1")
+	{
+		public.POST("/register", h.RegisterUser)
+		public.POST("/login", h.LoginUser)
+	}
+
+	protected := r.Group("/api/v1").Use(auth.Auth())
+	{
+		protected.GET("/balance", h.GetBalance)
+		protected.POST("/wallet/deposit", h.Deposit)
+		protected.POST("/wallet/withdraw", h.Withdraw)
+		protected.GET("/exchange/rates", h.ExchangeRates)
+		protected.POST("/exchange", h.Exchange)
+	}
 
 	return r, nil
 }

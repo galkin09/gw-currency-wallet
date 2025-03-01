@@ -16,6 +16,16 @@ import (
 	"time"
 )
 
+// @title Currency wallet
+// @version 1.0
+// @description API service
+
+// @host localhost:8080
+// @BasePath /
+
+// @securityDefinitions.apikey ApiKeyAuth
+// @in header
+// @name Authorization
 func main() {
 	// Инициализация логгера
 	logger, err := zap.NewProduction()
@@ -42,7 +52,7 @@ func main() {
 	}
 
 	// Инициализация gRPC-клиента
-	conn, err := grpc.Dial(cfg.GRPC.Addr, grpc.WithInsecure())
+	conn, err := grpc.NewClient(cfg.GRPC.Addr, grpc.WithInsecure())
 	if err != nil {
 		logger.Fatal("Failed to connect to gRPC server", zap.Error(err))
 	}

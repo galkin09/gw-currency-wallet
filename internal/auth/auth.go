@@ -13,13 +13,11 @@ var (
 	ExpireTime time.Duration
 )
 
-// Claims — структура для хранения данных в токене
 type Claims struct {
 	jwt.RegisteredClaims
 	Username string `json:"username"`
 }
 
-// NewToken creates new JWT token for given user
 func GenerateToken(user storages.User, expireTime time.Duration) (string, error) {
 	claims := Claims{
 		Username: user.Username,
@@ -38,9 +36,6 @@ func GenerateToken(user storages.User, expireTime time.Duration) (string, error)
 	return tokenString, nil
 }
 
-// ParseToken checks if provided token is valid and
-// return error if its not
-// or token structure if it is valid
 func ParseToken(tokenString string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		return jwtSecret, nil

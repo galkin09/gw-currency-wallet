@@ -25,9 +25,9 @@ func NewExchangerClient() *ExchangerClient {
 }
 
 func (e *ExchangerClient) GetExchangeRates(ctx context.Context, in *pb.Empty) (*pb.ExchangeRatesResponse, error) {
-	return e.GetExchangeRates(ctx, in)
+	return e.ExchangeServiceClient.GetExchangeRates(ctx, in)
 }
 
-func (e *ExchangerClient) GetExchangeRateForCurrency(ctx context.Context, in *pb.ExchangeRateResponse) (*pb.ExchangeRateResponse, error) {
-	return e.GetExchangeRateForCurrency(ctx, in)
+func (e *ExchangerClient) GetExchangeRateForCurrency(ctx context.Context, in *pb.CurrencyRequest) (*pb.ExchangeRateResponse, error) {
+	return e.ExchangeServiceClient.GetExchangeRateForCurrency(ctx, in)
 }

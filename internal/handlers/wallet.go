@@ -11,10 +11,10 @@ import (
 // Deposit wallet with provided amount
 //
 // @Summary      Deposit balance
-// @Description  deposit user wallet
-// @Tags         accounts
+// @Description  Пополнить баланс пользователя
+// @Tags         wallets, users
 // @Param 		 Authorization header string true "JWT token"
-// @Param		 amount body models.DepositReq true "Deposit query in json format"
+// @Param		 amount body storages.Deposit true "Deposit query in json format"
 // @Accept       json
 // @Produce      json
 // @Success      200
@@ -22,67 +22,61 @@ import (
 // @Router       /api/v1/wallet/deposit [post]
 func (h *Handler) Deposit(c *gin.Context) {
 	var dq storages.Deposit
+	var wallet storages.Wallet
 
-	// Привязка JSON из запроса
 	if err := c.ShouldBindJSON(&dq); err != nil {
 		h.logger.Error("Could not bind JSON", zap.Error(err))
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Проверка обязательных полей
-	if dq.Amount <= 0 || dq.Currency == "" {
-		h.logger.Error("Invalid deposit request", zap.Any("request", dq))
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "amount and currency are required"})
+	username, exists := c.Get("username")
+	if !exists {
+		h.logger.Error("Username not found in context")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authenticated"})
 		return
 	}
 
-	// Получаем текущий баланс пользователя из базы данных
-	username := c.GetString("username") // Предположим, что username сохранен в контексте
-	wallet, err := h.storage.GetWalletByUsername(c, username)
+	wallet, err := h.storage.GetWalletByUsername(c, username.(string))
 	if err != nil {
-		h.logger.Error("Failed to get wallet", zap.Error(err))
+		h.logger.Error("Could not get wallet", zap.Error(err))
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve wallet"})
 		return
 	}
 
-	// Обновляем баланс
 	switch dq.Currency {
+	case "RUB":
+		wallet.Balance.RUB += dq.Amount
 	case "USD":
 		wallet.Balance.USD += dq.Amount
 	case "EUR":
 		wallet.Balance.EUR += dq.Amount
-	case "RUB":
-		wallet.Balance.RUB += dq.Amount
 	default:
 		h.logger.Error("Unsupported currency", zap.String("currency", dq.Currency))
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "unsupported currency"})
 		return
 	}
 
-	// Логируем новый баланс
 	h.logger.Info("Updated wallet balance", zap.Any("balance", wallet.Balance))
 
-	// Сохраняем обновленный баланс в базе данных
-	if err := h.storage.Deposit(c, wallet); err != nil {
-		h.logger.Error("Failed to deposit funds", zap.Error(err))
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to update wallet"})
+	if err := h.storage.Deposit(c, wallet, dq.Currency, dq.Amount); err != nil {
+		h.logger.Error("Could not deposit", zap.Error(err))
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Возвращаем успешный ответ
 	c.JSON(http.StatusOK, gin.H{
-		"message":     "Deposit successful",
+		"message":     "Account topped up successfully",
 		"new_balance": wallet.Balance,
 	})
 }
 
 // Withdraw wallet with provided amount
 // @Summary      Withdraw amount
-// @Description  withdraw provided amount from user wallet
-// @Tags         accounts
+// @Description  Снять средства со счёта пользователя
+// @Tags         users, wallets
 // @Param 		 Authorization header string true "JWT token"
-// @Param		 amount body models.WithdrawReq true "Withdraw query in json format"
+// @Param		 amount body storages.Withdraw true "Withdraw query in json format"
 // @Accept       json
 // @Produce      json
 // @Success      200
@@ -94,45 +88,44 @@ func (h *Handler) Withdraw(c *gin.Context) {
 	// Привязка JSON из запроса
 	if err := c.ShouldBindJSON(&wq); err != nil {
 		h.logger.Error("Could not bind JSON", zap.Error(err))
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Проверка обязательных полей
-	if wq.Amount <= 0 || wq.Currency == "" {
-		h.logger.Error("Invalid withdraw request", zap.Any("request", wq))
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "amount and currency are required"})
+	h.logger.Debug("Withdraw request", zap.Any("request", wq))
+
+	username, exists := c.Get("username")
+	if !exists {
+		h.logger.Error("Username not found in context")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authenticated"})
 		return
 	}
 
-	// Получаем текущий баланс пользователя из базы данных
-	username := c.GetString("username") // Предположим, что username сохранен в контексте
-	wallet, err := h.storage.GetWalletByUsername(c, username)
+	wallet, err := h.storage.GetWalletByUsername(c, username.(string)) // Предположим, что wq.WalletID содержит ID кошелька
 	if err != nil {
-		h.logger.Error("Failed to get wallet", zap.Error(err))
+		h.logger.Error("Could not get wallet", zap.Error(err))
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve wallet"})
 		return
 	}
 
-	// Проверяем, достаточно ли средств для списания
 	switch wq.Currency {
 	case "USD":
 		if wallet.Balance.USD < wq.Amount {
-			h.logger.Error("Insufficient funds", zap.String("currency", wq.Currency))
+			h.logger.Error("Insufficient funds", zap.Float64("amount", wq.Amount), zap.Float64("balance", wallet.Balance.USD))
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "insufficient funds"})
 			return
 		}
 		wallet.Balance.USD -= wq.Amount
 	case "EUR":
 		if wallet.Balance.EUR < wq.Amount {
-			h.logger.Error("Insufficient funds", zap.String("currency", wq.Currency))
+			h.logger.Error("Insufficient funds", zap.Float64("amount", wq.Amount), zap.Float64("balance", wallet.Balance.EUR))
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "insufficient funds"})
 			return
 		}
 		wallet.Balance.EUR -= wq.Amount
 	case "RUB":
 		if wallet.Balance.RUB < wq.Amount {
-			h.logger.Error("Insufficient funds", zap.String("currency", wq.Currency))
+			h.logger.Error("Insufficient funds", zap.Float64("amount", wq.Amount), zap.Float64("balance", wallet.Balance.RUB))
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "insufficient funds"})
 			return
 		}
@@ -143,19 +136,16 @@ func (h *Handler) Withdraw(c *gin.Context) {
 		return
 	}
 
-	// Логируем новый баланс
-	h.logger.Info("Updated wallet balance", zap.Any("balance", wallet.Balance))
+	h.logger.Debug("Updated wallet balance", zap.Any("balance", wallet.Balance))
 
-	// Сохраняем обновленный баланс в базе данных
-	if err := h.storage.Withdraw(c, wallet); err != nil {
-		h.logger.Error("Failed to withdraw funds", zap.Error(err))
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to update wallet"})
+	if err := h.storage.Withdraw(c, wallet, wq.Currency, wq.Amount); err != nil {
+		h.logger.Error("Could not withdraw", zap.Error(err))
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Возвращаем успешный ответ
 	c.JSON(http.StatusOK, gin.H{
-		"message":     "Withdrawal successful",
+		"message":     "Funds withdrawn successfully",
 		"new_balance": wallet.Balance,
 	})
 }
@@ -163,87 +153,119 @@ func (h *Handler) Withdraw(c *gin.Context) {
 // Exchange one currency to another with provided amount
 //
 //	@Summary      Exchanger endpoint
-//	@Description  exchange one currency to another
+//	@Description  Позволяет обменять валюту на другую, курс можно узнать в /api/v1/exchange/rates
 //	@Tags         exchange
-//	@Param 		 Authorization header string true "JWT token"
-//	@Param		  amount body models.ExchangeReq true "Exchange query in json format"
+//	@Param 		  Authorization header string true "JWT token"
+//	@Param		  amount body storages.Exchanger true "Exchange query in json format"
 //	@Accept       json
 //	@Produce      json
 //	@Success      200
 //	@Failure      400
 //	@Router       /api/v1/exchange [post]
-//func (h *Handler) Exchange(c *gin.Context) {
-//	var exchangeReq storages.Exchanger
-//
-//	username := c.GetString("username")
-//	if username == "" {
-//		h.logger.Error("Username not found in context")
-//		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "username not found"})
-//		return
-//	}
-//
-//	if err := c.ShouldBindJSON(&exchangeReq); err != nil {
-//		h.logger.Error("Could not bind JSON", zap.Error(err))
-//		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
-//		return
-//	}
-//
-//	if exchangeReq.FromCurrency == "" || exchangeReq.ToCurrency == "" || exchangeReq.Amount <= 0 {
-//		h.logger.Error("Invalid exchange request", zap.Any("request", exchangeReq))
-//		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "from_currency, to_currency, and amount are required"})
-//		return
-//	}
-//
-//	// Получаем курс валют из кэша
-//	rate, found := h.Cache.Get("rate")
-//	if found {
-//		h.logger.Debug("Rate fetched from cache", zap.Any("rate", rate))
-//		exchangeReq.Rate = rate.(storages.Currency)
-//	} else {
-//		h.logger.Debug("Could not get rate from cache")
-//		// Если курс не найден в кэше, можно запросить его из внешнего сервиса
-//		// Например: exchangeReq.Rate, err = h.currencyService.GetRate(exchangeReq.FromCurrency, exchangeReq.ToCurrency)
-//		// if err != nil { ... }
-//	}
-//
-//	// Получаем кошелек пользователя
-//	wallet, err := h.storage.GetWalletByUsername(c, username)
-//	if err != nil {
-//		h.logger.Error("Failed to get wallet", zap.Error(err))
-//		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve wallet"})
-//		return
-//	}
-//
-//	// Выполняем обмен валют
-//	updatedWallet, err := h.storage.Exchange(c, wallet, exchangeReq)
-//	if err != nil {
-//		h.logger.Error("Failed to exchange currency", zap.Error(err))
-//		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to exchange currency"})
-//		return
-//	}
-//
-//	// Логируем новый баланс
-//	h.logger.Info("Updated wallet balance after exchange", zap.Any("balance", updatedWallet.Balance))
-//
-//	// Возвращаем успешный ответ
-//	c.JSON(http.StatusOK, gin.H{
-//		"message":     "Exchange successful",
-//		"new_balance": updatedWallet.Balance,
-//	})
-//}
+func (h *Handler) Exchange(c *gin.Context) {
+	var ex storages.Exchanger
 
-// ExchangeRates one currency to another with provided amount
+	if err := c.ShouldBindJSON(&ex); err != nil {
+		h.logger.Error("Could not bind JSON", zap.Error(err))
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	h.logger.Debug("Exchange request", zap.Any("request", ex))
+
+	username, exists := c.Get("username")
+	if !exists {
+		h.logger.Error("Username not found in context")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authenticated"})
+		return
+	}
+
+	wallet, err := h.storage.GetWalletByUsername(c, username.(string)) // Предположим, что ex.WalletID содержит ID кошелька
+	if err != nil {
+		h.logger.Error("Could not get wallet", zap.Error(err))
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve wallet"})
+		return
+	}
+
+	rate, err := h.exch.GetExchangeRateForCurrency(c.Request.Context(), &pb.CurrencyRequest{
+		FromCurrency: ex.FromCurrency,
+		ToCurrency:   ex.ToCurrency,
+	})
+	if err != nil {
+		h.logger.Error("Could not get exchange rate", zap.Error(err))
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to get exchange rate"})
+		return
+	}
+
+	convertedAmount := ex.Amount * float64(rate.Rate)
+
+	switch ex.FromCurrency {
+	case "USD":
+		if wallet.Balance.USD < ex.Amount {
+			h.logger.Error("Insufficient funds", zap.Float64("amount", ex.Amount), zap.Float64("balance", wallet.Balance.USD))
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "insufficient funds"})
+			return
+		}
+		wallet.Balance.USD -= ex.Amount
+	case "EUR":
+		if wallet.Balance.EUR < ex.Amount {
+			h.logger.Error("Insufficient funds", zap.Float64("amount", ex.Amount), zap.Float64("balance", wallet.Balance.EUR))
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "insufficient funds"})
+			return
+		}
+		wallet.Balance.EUR -= ex.Amount
+	case "RUB":
+		if wallet.Balance.RUB < ex.Amount {
+			h.logger.Error("Insufficient funds", zap.Float64("amount", ex.Amount), zap.Float64("balance", wallet.Balance.RUB))
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "insufficient funds"})
+			return
+		}
+		wallet.Balance.RUB -= ex.Amount
+	default:
+		h.logger.Error("Unsupported currency", zap.String("currency", ex.FromCurrency))
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "unsupported currency"})
+		return
+	}
+
+	switch ex.ToCurrency {
+	case "USD":
+		wallet.Balance.USD += convertedAmount
+	case "EUR":
+		wallet.Balance.EUR += convertedAmount
+	case "RUB":
+		wallet.Balance.RUB += convertedAmount
+	default:
+		h.logger.Error("Unsupported currency", zap.String("currency", ex.ToCurrency))
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "unsupported currency"})
+		return
+	}
+
+	h.logger.Debug("Updated wallet balance", zap.Any("balance", wallet.Balance))
+
+	if err := h.storage.UpdateWalletBalance(c, wallet); err != nil {
+		h.logger.Error("Could not update wallet balance", zap.Error(err))
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":          "Exchange completed successfully",
+		"exchanged_amount": convertedAmount,
+		"new_balance":      wallet.Balance,
+	})
+}
+
+// ExchangeRates all rates in exchanger
 //
 //	@Summary      Exchanger endpoint
-//	@Description  exchange one currency to another
+//	@Description  Позволяет узнать актуальный курс по отношению к доллару
 //	@Tags         exchange
-//	@Param 		 Authorization header string true "JWT token"
-//	@Param		  amount body models.ExchangeReq true "Exchange query in json format"
+//	@Param 		  Authorization header string true "JWT token"
 //	@Accept       json
 //	@Produce      json
 //	@Success      200
 //	@Failure      400
-//	@Router       /api/v1/exchange [post]
+//	@Router       /api/v1/exchange/rates [get]
 func (h *Handler) ExchangeRates(c *gin.Context) {
 	var resp storages.Rates
 

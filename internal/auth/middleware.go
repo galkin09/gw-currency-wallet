@@ -6,7 +6,6 @@ import (
 	"strings"
 )
 
-// Auth middleware for gin router. Provides authentication mechanism via JWT
 func Auth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")

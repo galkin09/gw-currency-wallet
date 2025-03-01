@@ -12,10 +12,11 @@ import (
 // RegisterUser adds new user account
 //
 //	@Summary      Register user
-//	@Description  register new users
-//	@Tags         accounts
+//	@Description  Регистрация нового пользователя
+//	@Tags         users
 //	@Accept       json
 //	@Produce      json
+//	@Param input body storages.User true "user info"
 //	@Success      201
 //	@Failure      400
 //	@Router       /api/v1/register [post]
@@ -46,14 +47,15 @@ func (h *Handler) RegisterUser(ctx *gin.Context) {
 
 // LoginUser authorizes  adds new user account
 //
-//	@Summary      Authorize existing user
-//	@Description  authorize users
-//	@Tags         accounts
-//	@Accept       json
-//	@Produce      json
-//	@Success      200
-//	@Failure      400
-//	@Router       /api/v1/login [post]
+//		@Summary      Authorize  user
+//		@Description  Авторизация пользователя
+//		@Tags         users
+//		@Accept       json
+//		@Produce      json
+//	    @Param input body storages.User true "Данные пользователя"
+//		@Success      200
+//		@Failure      400
+//		@Router       /api/v1/login [post]
 func (h *Handler) LoginUser(ctx *gin.Context) {
 	var user storages.User
 
@@ -74,11 +76,11 @@ func (h *Handler) LoginUser(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{"token": jwtToken})
 }
 
-// GetBalance returns wallet balance
+// GetBalance godoc
 //
 //	@Summary      Shows wallet balance
-//	@Description  shows user wallet balance
-//	@Tags         accounts, wallets
+//	@Description  Показывает баланс пользователя на счёте по юзернейму
+//	@Tags         users, wallets
 //	@Param 		  Authorization header string true "JWT token"
 //	@Accept       json
 //	@Produce      json
@@ -86,18 +88,33 @@ func (h *Handler) LoginUser(ctx *gin.Context) {
 //	@Failure      400
 //	@Router       /api/v1/balance [get]
 func (h *Handler) GetBalance(ctx *gin.Context) {
-	var user storages.User
+	username, exists := ctx.Get("username")
+	if !exists {
+		h.logger.Error("Username not found in context")
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "user not authenticated"})
+		return
+	}
 
-	user.Username = ctx.Param("username")
-	h.logger.Info("Getting balance for user", zap.Any("user", user))
+	usernameStr, ok := username.(string)
+	if !ok {
+		h.logger.Error("Invalid username format in context")
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "invalid username format"})
+		return
+	}
+
+	user := storages.User{
+		Username: usernameStr,
+	}
+
+	h.logger.Info("Getting balance for user", zap.String("username", user.Username))
 
 	balance, err := h.storage.GetBalance(ctx, user)
 	if err != nil {
-		h.logger.Error("GetBalance Error", zap.Any("user", user), zap.Error(err))
+		h.logger.Error("GetBalance Error", zap.String("username", user.Username), zap.Error(err))
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	h.logger.Info("Successfully got balance for wallet", zap.Any("wallet", storages.Wallet{}))
+	h.logger.Info("Successfully got balance", zap.Any("balance", balance))
 	ctx.JSON(http.StatusOK, gin.H{"balance": balance})
 }

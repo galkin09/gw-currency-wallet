@@ -17,15 +17,14 @@ type Handler struct {
 	cache   *cache.Cache
 }
 
-func NewHandler(ctx context.Context, logger *zap.Logger, dbURL string, migrationsPath string, exchangeClient pb.ExchangeServiceClient, c *cache.Cache) (*Handler, error) {
-	// Инициализация базы данных
+func NewHandler(ctx context.Context, logger *zap.Logger, dbURL string, migrationsPath string,
+	exchangeClient pb.ExchangeServiceClient, c *cache.Cache) (*Handler, error) {
 	psql := postgres.NewPSQL(logger)
 	if err := psql.Start(ctx, dbURL, 10*time.Second, migrationsPath); err != nil {
 		logger.Error("Failed to initialize PostgreSQL", zap.Error(err))
 		return nil, err
 	}
 
-	// Инициализация обработчика
 	return &Handler{
 		storage: psql,
 		exch:    exchangeClient,

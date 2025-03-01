@@ -1,0 +1,217 @@
+basePath: /
+definitions:
+  storages.Deposit:
+    properties:
+      amount:
+        type: number
+      currency:
+        type: string
+    type: object
+  storages.Exchanger:
+    properties:
+      amount:
+        type: number
+      from_currency:
+        type: string
+      to_currency:
+        type: string
+    type: object
+  storages.User:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+      username:
+        type: string
+    type: object
+  storages.Withdraw:
+    properties:
+      amount:
+        type: number
+      currency:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: API service
+  title: Currency wallet
+  version: "1.0"
+paths:
+  /api/v1/balance:
+    get:
+      consumes:
+      - application/json
+      description: Показывает баланс пользователя на счёте по юзернейму
+      parameters:
+      - description: JWT token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+      summary: Shows wallet balance
+      tags:
+      - users
+      - wallets
+  /api/v1/exchange:
+    post:
+      consumes:
+      - application/json
+      description: Позволяет обменять валюту на другую, курс можно узнать в /api/v1/exchange/rates
+      parameters:
+      - description: JWT token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Exchange query in json format
+        in: body
+        name: amount
+        required: true
+        schema:
+          $ref: '#/definitions/storages.Exchanger'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+      summary: Exchanger endpoint
+      tags:
+      - exchange
+  /api/v1/exchange/rates:
+    get:
+      consumes:
+      - application/json
+      description: Позволяет узнать актуальный курс по отношению к доллару
+      parameters:
+      - description: JWT token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+      summary: Exchanger endpoint
+      tags:
+      - exchange
+  /api/v1/login:
+    post:
+      consumes:
+      - application/json
+      description: Авторизация пользователя
+      parameters:
+      - description: Данные пользователя
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/storages.User'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+      summary: Authorize  user
+      tags:
+      - users
+  /api/v1/register:
+    post:
+      consumes:
+      - application/json
+      description: Регистрация нового пользователя
+      parameters:
+      - description: user info
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/storages.User'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+        "400":
+          description: Bad Request
+      summary: Register user
+      tags:
+      - users
+  /api/v1/wallet/deposit:
+    post:
+      consumes:
+      - application/json
+      description: Пополнить баланс пользователя
+      parameters:
+      - description: JWT token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Deposit query in json format
+        in: body
+        name: amount
+        required: true
+        schema:
+          $ref: '#/definitions/storages.Deposit'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+      summary: Deposit balance
+      tags:
+      - wallets
+      - users
+  /api/v1/wallet/withdraw:
+    post:
+      consumes:
+      - application/json
+      description: Снять средства со счёта пользователя
+      parameters:
+      - description: JWT token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Withdraw query in json format
+        in: body
+        name: amount
+        required: true
+        schema:
+          $ref: '#/definitions/storages.Withdraw'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+      summary: Withdraw amount
+      tags:
+      - users
+      - wallets
+securityDefinitions:
+  ApiKeyAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

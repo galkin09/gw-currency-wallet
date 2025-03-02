@@ -7,26 +7,35 @@ services:
     ports:
       - "8080:8080"
     env_file:
-      - .env
+      - config.env
     depends_on:
-      db:
+      db_wallet:
         condition: service_healthy
+    networks:
+      - mynetwork
 
-  db:
+  db_wallet:
     image: postgres:13-alpine
-    command: postgres
-    env_file:
-      - .env
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: wallet_db
     ports:
-      - "5433:5432"  # Порт 5433 на хосте, 5432 в контейнере
+      - "5432:5432"  # Порт 5433 на хосте, 5432 в контейнере
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./migrations:/docker-entrypoint-initdb.d
+      - ./internal/storages/migrations:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d wallets"]
-      interval: 5s
-      timeout: 5s
+      test: ["CMD-SHELL", "pg_isready -U postgres -d wallet_db"]
+      interval: 10s
+      timeout: 10s
       retries: 5
+    networks:
+      - mynetwork
 
 volumes:
   postgres_data:
+
+networks:
+  mynetwork:
+    external: true

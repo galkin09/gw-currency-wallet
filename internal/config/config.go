@@ -56,7 +56,7 @@ func LoadConfig(envPath string) (*Config, error) {
 		Port:           os.Getenv("DB_PORT"),
 		Database:       os.Getenv("DB_NAME"),
 		ConnTimeout:    connTimeout,
-		MigrationsPath: os.Getenv("DB_MIGRATIONS_PATH"),
+		MigrationsPath: os.Getenv("MIGRATIONS_PATH"),
 	}
 
 	grpcConfig := GRPCConfig{

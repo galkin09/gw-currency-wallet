@@ -16,7 +16,7 @@ WORKDIR /app
 
 COPY --from=builder /app/gw-currency-wallet .
 COPY --from=builder /app/config.env .
-COPY --from=builder /app/internal/storages/migrations ./migrations
+COPY --from=builder /app/internal/storages/migrations ./internal/storages/migrations
 
 EXPOSE 8080
 

@@ -1,2 +1,2 @@
-DROP TABLE users;
-DROP TABLE wallets;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS wallets;
